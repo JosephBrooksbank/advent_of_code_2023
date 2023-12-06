@@ -39,7 +39,6 @@ impl StringHelpers for str {
 pub fn sum_all_lines(lines: Vec<String>) -> u32 {
     let sum = lines.iter().fold(0, |accumulator, s| {
         let line_sum = s.get_first_last_number();
-        dbg!(line_sum);
         accumulator + line_sum
     });
     sum
