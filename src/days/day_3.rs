@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
+
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -12,6 +14,12 @@ pub struct Engine {
 struct Pos {
     x: usize,
     y: usize,
+}
+
+#[derive(Debug, PartialEq)]
+struct CharPos {
+    c: char,
+    pos: Pos,
 }
 
 #[derive(Debug, EnumIter, PartialEq)]
@@ -76,27 +84,25 @@ impl Engine {
     }
 
     pub fn sum_valid_nums(&self) -> usize {
-        let mut sum: usize = 0;
-        for (i, line) in self.schematic.iter().enumerate() {
-            let nums = parse_line_into_numbers(line);
-            for num_in_line in nums {
-                if self.test_around_number(num_in_line.x, i, &num_in_line.value) {
-                    // print!(" {} ", num_in_line.value);
-                    sum += num_in_line.value.parse::<usize>().unwrap();
-                } else {
-                    print!(" {} ", num_in_line.value);
-                }
-            }
-            println!();
-        }
-        sum
+        self.schematic
+            .iter()
+            .enumerate()
+            .flat_map(|(i, line)| {
+                parse_line_into_numbers(line)
+                    .into_iter()
+                    .filter(move |num_in_line| {
+                        self.test_around_number(num_in_line.x, i, &num_in_line.value)
+                    })
+            })
+            .map(|num| num.value.parse::<usize>().unwrap())
+            .sum()
     }
 
-    fn get_surrounding_number<'a>(
+    fn get_characters_surrounding_number<'a>(
         &'a self,
         pos: Pos,
         val: &'a String,
-    ) -> impl Iterator<Item = char> + 'a {
+    ) -> impl Iterator<Item = CharPos> + 'a {
         val.chars()
             .enumerate()
             .flat_map(move |(index, _)| self.get_surrounding(pos.x + index, pos.y).into_iter())
@@ -104,8 +110,8 @@ impl Engine {
 
     fn test_around_number(&self, x: usize, y: usize, val: &String) -> bool {
         let pos = Pos { x, y };
-        self.get_surrounding_number(pos, val)
-            .any(|c| (!c.is_digit(10) && c != '.'))
+        self.get_characters_surrounding_number(pos, val)
+            .any(|c| (!c.c.is_digit(10) && c.c != '.'))
     }
 
     fn get_coord(&self, x: usize, y: usize, dir: Direction) -> char {
@@ -154,15 +160,18 @@ impl Engine {
         }
     }
 
-    fn get_surrounding(&self, x: usize, y: usize) -> Vec<char> {
-        let mut surrounding = vec![];
-        for current_dir in Direction::iter() {
-            match current_dir {
-                Direction::Current => (),
-                dir => surrounding.push(self.get_coord(x, y, dir)),
-            }
+    fn get_char_pos(&self, x: usize, y: usize, dir: Direction) -> CharPos {
+        CharPos {
+            c: self.get_coord(x, y, dir),
+            pos: Pos { x, y },
         }
-        surrounding
+    }
+
+    fn get_surrounding(&self, x: usize, y: usize) -> Vec<CharPos> {
+        Direction::iter()
+            .filter(|dir| dir != &Direction::Current)
+            .map(|dir| self.get_char_pos(x, y, dir))
+            .collect()
     }
 }
 
@@ -215,7 +224,11 @@ mod tests {
     fn get_surrounding_should_work() {
         let engine = gen_engine();
         assert_eq!(
-            engine.get_surrounding(2, 2),
+            engine
+                .get_surrounding(2, 2)
+                .into_iter()
+                .map(|c_pos| c_pos.c)
+                .collect::<Vec<char>>(),
             vec!['.', '.', '*', '.', '5', '.', '.', '.']
         )
     }
