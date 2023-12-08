@@ -1,9 +1,17 @@
+use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 #[derive(Debug)]
 pub struct Engine {
     schematic: Vec<Vec<char>>,
+    gears: HashMap<Pos, Vec<NumberInLine>>,
+}
+
+#[derive(Debug, PartialEq)]
+struct Pos {
+    x: usize,
+    y: usize,
 }
 
 #[derive(Debug, EnumIter, PartialEq)]
@@ -31,54 +39,46 @@ struct NumberInLine {
     x: usize,
 }
 
-fn get_numbers_from_line(line: &Vec<char>) -> Vec<NumberInLine> {
+fn create_number_in_line(buffer: &mut Vec<&char>, index: usize) -> NumberInLine {
+    let value = buffer.iter().cloned().collect::<String>();
+    let len = value.len();
+    buffer.clear();
+    NumberInLine {
+        value,
+        x: index - len,
+    }
+}
+
+fn parse_line_into_numbers(line: &Vec<char>) -> Vec<NumberInLine> {
     let mut buffer = vec![];
-    let mut out = vec![];
+    let mut numbers = vec![];
 
     for (index, c) in line.into_iter().enumerate() {
         if c.is_digit(10) {
             buffer.push(c)
-        } else {
-            if buffer.len() > 0 {
-                let val = buffer.iter().cloned().collect::<String>();
-                let len = val.len();
-                out.push(NumberInLine {
-                    value: val,
-                    x: index - len,
-                });
-                buffer.clear();
-            }
+        } else if !buffer.is_empty() {
+            numbers.push(create_number_in_line(&mut buffer, index));
         }
     }
-    if buffer.len() > 0 {
-        let val = buffer.iter().cloned().collect::<String>();
-        let len = val.len();
-        out.push(NumberInLine {
-            value: val,
-            x: line.len() - len,
-        });
-        buffer.clear();
+    if !buffer.is_empty() {
+        numbers.push(create_number_in_line(&mut buffer, line.len()));
     }
-
-    out
+    numbers
 }
 
 impl Engine {
     pub fn from_string(input: String) -> Engine {
-        let mut schematic: Vec<Vec<char>> = vec![];
-        let lines = input.lines();
-        for line in lines {
-            let current_line = line.chars().collect();
-            schematic.push(current_line);
+        let schematic: Vec<Vec<char>> = input.lines().map(|line| line.chars().collect()).collect();
+        Engine {
+            schematic,
+            gears: HashMap::new(),
         }
-
-        Engine { schematic }
     }
 
     pub fn sum_valid_nums(&self) -> usize {
         let mut sum: usize = 0;
         for (i, line) in self.schematic.iter().enumerate() {
-            let nums = get_numbers_from_line(line);
+            let nums = parse_line_into_numbers(line);
             for num_in_line in nums {
                 if self.test_around_number(num_in_line.x, i, &num_in_line.value) {
                     // print!(" {} ", num_in_line.value);
@@ -92,17 +92,20 @@ impl Engine {
         sum
     }
 
+    fn get_surrounding_number<'a>(
+        &'a self,
+        pos: Pos,
+        val: &'a String,
+    ) -> impl Iterator<Item = char> + 'a {
+        val.chars()
+            .enumerate()
+            .flat_map(move |(index, _)| self.get_surrounding(pos.x + index, pos.y).into_iter())
+    }
+
     fn test_around_number(&self, x: usize, y: usize, val: &String) -> bool {
-        for (index, _) in val.chars().enumerate() {
-            let surrounding = self
-                .get_surrounding(x + index, y)
-                .iter()
-                .any(|c| (!c.is_digit(10) && c != &'.'));
-            if surrounding {
-                return surrounding;
-            }
-        }
-        return false;
+        let pos = Pos { x, y };
+        self.get_surrounding_number(pos, val)
+            .any(|c| (!c.is_digit(10) && c != '.'))
     }
 
     fn get_coord(&self, x: usize, y: usize, dir: Direction) -> char {
@@ -166,6 +169,7 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     fn gen_engine() -> Engine {
         let input = "\
 467..114..
@@ -190,6 +194,7 @@ mod tests {
         let sum = engine.sum_valid_nums();
         assert_eq!(sum, 4361);
     }
+
     #[test]
     fn test_surrounding_should_work() {
         let engine = gen_engine();
@@ -200,7 +205,7 @@ mod tests {
     #[test]
     fn numbers_from_line_should_work() {
         let line = "467..114..".chars().collect();
-        let numbs = get_numbers_from_line(&line);
+        let numbs = parse_line_into_numbers(&line);
         assert_eq!(numbs.len(), 2);
         assert_eq!(numbs[0].value, "467");
         assert_eq!(numbs[1].x, 5);
