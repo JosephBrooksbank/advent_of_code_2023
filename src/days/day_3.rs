@@ -7,10 +7,9 @@ use strum_macros::EnumIter;
 #[derive(Debug)]
 pub struct Engine {
     schematic: Vec<Vec<char>>,
-    gears: HashMap<Pos, Vec<NumberInLine>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash, Eq, Clone, Copy)]
 struct Pos {
     x: usize,
     y: usize,
@@ -20,6 +19,18 @@ struct Pos {
 struct CharPos {
     c: char,
     pos: Pos,
+}
+
+impl Clone for CharPos {
+    fn clone(&self) -> Self {
+        CharPos {
+            c: self.c.clone(),
+            pos: Pos {
+                x: self.pos.x.clone(),
+                y: self.pos.y.clone(),
+            },
+        }
+    }
 }
 
 #[derive(Debug, EnumIter, PartialEq)]
@@ -74,13 +85,43 @@ fn parse_line_into_numbers(line: &Vec<char>) -> Vec<NumberInLine> {
     numbers
 }
 
+fn merge_hash_maps(
+    mut map1: HashMap<Pos, Vec<String>>,
+    map2: &HashMap<Pos, Vec<String>>,
+) -> HashMap<Pos, Vec<String>> {
+    for (key, value) in map2 {
+        match map1.contains_key(&key) {
+            true => {
+                let mut vec = map1.get_mut(&key).unwrap();
+                vec.extend(value.clone());
+            }
+            false => {
+                map1.insert(key.clone(), value.clone());
+            }
+        }
+    }
+    map1
+}
+
 impl Engine {
     pub fn from_string(input: String) -> Engine {
         let schematic: Vec<Vec<char>> = input.lines().map(|line| line.chars().collect()).collect();
-        Engine {
-            schematic,
-            gears: HashMap::new(),
+        Engine { schematic }
+    }
+
+    fn find_gears(&self) -> HashMap<Pos, Vec<String>> {
+        let mut gears = HashMap::new();
+
+        for (i, line) in self.schematic.iter().enumerate() {
+            for num_in_line in parse_line_into_numbers(line) {
+                let pos = Pos {
+                    x: num_in_line.x,
+                    y: i,
+                };
+                self.find_gear_around_number(&mut gears, &pos, &num_in_line.value);
+            }
         }
+        gears
     }
 
     pub fn sum_valid_nums(&self) -> usize {
@@ -98,20 +139,42 @@ impl Engine {
             .sum()
     }
 
-    fn get_characters_surrounding_number<'a>(
-        &'a self,
-        pos: Pos,
-        val: &'a String,
-    ) -> impl Iterator<Item = CharPos> + 'a {
+    fn get_characters_surrounding_number<'a>(&'a self, pos: &Pos, val: &'a String) -> Vec<CharPos> {
         val.chars()
             .enumerate()
-            .flat_map(move |(index, _)| self.get_surrounding(pos.x + index, pos.y).into_iter())
+            .flat_map(|(index, _)| self.get_surrounding(pos.x + index, pos.y))
+            .collect()
     }
 
     fn test_around_number(&self, x: usize, y: usize, val: &String) -> bool {
         let pos = Pos { x, y };
-        self.get_characters_surrounding_number(pos, val)
+        self.get_characters_surrounding_number(&pos, val)
+            .iter()
             .any(|c| (!c.c.is_digit(10) && c.c != '.'))
+    }
+
+    fn find_gear_around_number(
+        &self,
+        gears: &mut HashMap<Pos, Vec<String>>,
+        pos: &Pos,
+        val: &String,
+    ) {
+        for c_pos in self.get_characters_surrounding_number(pos, val) {
+            if c_pos.c == '*' {
+                self.add_gear(gears, &c_pos.pos, val);
+            }
+        }
+    }
+
+    fn add_gear(&self, gears: &mut HashMap<Pos, Vec<String>>, pos: &Pos, val: &String) {
+        match gears.contains_key(&pos) {
+            true => {
+                gears.get_mut(&pos).unwrap().push(val.clone());
+            }
+            false => {
+                gears.insert(pos.clone(), vec![val.clone()]);
+            }
+        }
     }
 
     fn get_coord(&self, x: usize, y: usize, dir: Direction) -> char {
@@ -195,6 +258,13 @@ mod tests {
             .to_string();
         let engine = Engine::from_string(input);
         engine
+    }
+
+    #[test]
+    fn find_gears_should_work() {
+        let mut engine = gen_engine();
+        let gears = engine.find_gears();
+        dbg!(gears);
     }
 
     #[test]
