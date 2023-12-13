@@ -4,6 +4,9 @@ use std::fmt::Debug;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+#[derive(Debug, Clone)]
+struct OutOfBoundsError;
+
 #[derive(Debug)]
 pub struct Engine {
     schematic: Vec<Vec<char>>,
@@ -19,6 +22,24 @@ struct Pos {
 struct CharPos {
     c: char,
     pos: Pos,
+}
+
+impl CharPos {
+    fn new(c: char, pos: Pos) -> CharPos {
+        CharPos { c, pos }
+    }
+    fn default() -> CharPos {
+        CharPos {
+            c: '.',
+            pos: Pos { x: 0, y: 0 },
+        }
+    }
+}
+
+impl Default for CharPos {
+    fn default() -> Self {
+        Self::default()
+    }
 }
 
 impl Clone for CharPos {
@@ -44,6 +65,13 @@ enum Direction {
     Down,
     RDown,
     Current,
+}
+
+enum PositionInNumber {
+    Start,
+    Middle,
+    End,
+    Single,
 }
 
 impl Default for Direction {
@@ -92,7 +120,7 @@ fn merge_hash_maps(
     for (key, value) in map2 {
         match map1.contains_key(&key) {
             true => {
-                let mut vec = map1.get_mut(&key).unwrap();
+                let vec = map1.get_mut(&key).unwrap();
                 vec.extend(value.clone());
             }
             false => {
@@ -140,17 +168,25 @@ impl Engine {
     }
 
     fn get_characters_surrounding_number<'a>(&'a self, pos: &Pos, val: &'a String) -> Vec<CharPos> {
-        val.chars()
-            .enumerate()
-            .flat_map(|(index, _)| self.get_surrounding(pos.x + index, pos.y))
-            .collect()
+        let mut surrounding = vec![];
+        surrounding.extend(self.get_surrounding(pos.x, pos.y, PositionInNumber::Start));
+        surrounding.extend(self.get_surrounding(
+            pos.x + val.len() - 1,
+            pos.y,
+            PositionInNumber::End,
+        ));
+        for i in 1..val.len() - 1 {
+            surrounding.extend(self.get_surrounding(pos.x + i, pos.y, PositionInNumber::Middle));
+        }
+
+        surrounding
     }
 
     fn test_around_number(&self, x: usize, y: usize, val: &String) -> bool {
         let pos = Pos { x, y };
         self.get_characters_surrounding_number(&pos, val)
             .iter()
-            .any(|c| (!c.c.is_digit(10) && c.c != '.'))
+            .any(|c| !c.c.is_digit(10) && c.c != '.')
     }
 
     fn find_gear_around_number(
@@ -177,7 +213,7 @@ impl Engine {
         }
     }
 
-    fn get_coord(&self, x: usize, y: usize, dir: Direction) -> char {
+    fn get_coord(&self, x: usize, y: usize, dir: Direction) -> Result<CharPos, OutOfBoundsError> {
         let mut x: i128 = x.try_into().unwrap();
         let mut y: i128 = y.try_into().unwrap();
 
@@ -206,7 +242,7 @@ impl Engine {
         }
 
         if x < 0 || y < 0 {
-            return '.';
+            return Err(OutOfBoundsError);
         }
 
         let x: usize = x.unsigned_abs().try_into().unwrap();
@@ -214,27 +250,57 @@ impl Engine {
 
         let row = match self.schematic.get(y) {
             Some(val) => val,
-            None => return '.',
+            None => return Err(OutOfBoundsError),
         };
 
         match row.get(x) {
-            Some(val) => val.clone(),
-            None => '.',
+            Some(val) => Ok(CharPos {
+                c: val.clone(),
+                pos: Pos { x, y },
+            }),
+            None => Err(OutOfBoundsError),
         }
     }
 
-    fn get_char_pos(&self, x: usize, y: usize, dir: Direction) -> CharPos {
-        CharPos {
-            c: self.get_coord(x, y, dir),
-            pos: Pos { x, y },
+    fn get_surrounding(
+        &self,
+        x: usize,
+        y: usize,
+        position_in_number: PositionInNumber,
+    ) -> Vec<CharPos> {
+        let mut surrounding = vec![];
+        match position_in_number {
+            PositionInNumber::Start => {
+                surrounding.push(self.get_coord(x, y, Direction::L).unwrap_or_default());
+                surrounding.push(self.get_coord(x, y, Direction::LUp).unwrap_or_default());
+                surrounding.push(self.get_coord(x, y, Direction::Up).unwrap_or_default());
+                surrounding.push(self.get_coord(x, y, Direction::LDown).unwrap_or_default());
+                surrounding.push(self.get_coord(x, y, Direction::Down).unwrap_or_default());
+            }
+            PositionInNumber::Middle => {
+                surrounding.push(self.get_coord(x, y, Direction::Up).unwrap_or_default());
+                surrounding.push(self.get_coord(x, y, Direction::Down).unwrap_or_default());
+            }
+            PositionInNumber::End => {
+                surrounding.push(self.get_coord(x, y, Direction::R).unwrap_or_default());
+                surrounding.push(self.get_coord(x, y, Direction::RUp).unwrap_or_default());
+                surrounding.push(self.get_coord(x, y, Direction::Up).unwrap_or_default());
+                surrounding.push(self.get_coord(x, y, Direction::RDown).unwrap_or_default());
+                surrounding.push(self.get_coord(x, y, Direction::Down).unwrap_or_default());
+            }
+            PositionInNumber::Single => {
+                surrounding = Direction::iter()
+                    .filter(|dir| dir != &Direction::Current)
+                    .map(|dir| {
+                        self.get_coord(x, y, dir).unwrap_or(CharPos {
+                            c: '.'.to_string().chars().next().unwrap(),
+                            pos: Pos { x: 0, y: 0 },
+                        })
+                    })
+                    .collect()
+            }
         }
-    }
-
-    fn get_surrounding(&self, x: usize, y: usize) -> Vec<CharPos> {
-        Direction::iter()
-            .filter(|dir| dir != &Direction::Current)
-            .map(|dir| self.get_char_pos(x, y, dir))
-            .collect()
+        surrounding
     }
 }
 
@@ -262,7 +328,7 @@ mod tests {
 
     #[test]
     fn find_gears_should_work() {
-        let mut engine = gen_engine();
+        let engine = gen_engine();
         let gears = engine.find_gears();
         dbg!(gears);
     }
@@ -295,7 +361,7 @@ mod tests {
         let engine = gen_engine();
         assert_eq!(
             engine
-                .get_surrounding(2, 2)
+                .get_surrounding(2, 2, PositionInNumber::Single)
                 .into_iter()
                 .map(|c_pos| c_pos.c)
                 .collect::<Vec<char>>(),
@@ -306,7 +372,7 @@ mod tests {
     #[test]
     fn get_coord_should_work() {
         let engine = gen_engine();
-        assert_eq!(engine.get_coord(1, 0, Direction::Current), '6');
-        assert_eq!(engine.get_coord(1, 0, Direction::R), '7')
+        assert_eq!(engine.get_coord(1, 0, Direction::Current).unwrap().c, '6');
+        assert_eq!(engine.get_coord(1, 0, Direction::R).unwrap().c, '7')
     }
 }
