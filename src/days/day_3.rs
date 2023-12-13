@@ -132,6 +132,17 @@ fn merge_hash_maps(
 }
 
 impl Engine {
+    pub fn sum_gear_ratios(&self) -> usize {
+        let gears = self.find_gears();
+        let mut sum = 0;
+        for (_pos, gear) in gears {
+            if gear.len() == 2 {
+                sum += gear[0].parse::<usize>().unwrap() * gear[1].parse::<usize>().unwrap();
+            }
+        }
+        sum
+    }
+
     pub fn from_string(input: String) -> Engine {
         let schematic: Vec<Vec<char>> = input.lines().map(|line| line.chars().collect()).collect();
         Engine { schematic }
