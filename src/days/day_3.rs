@@ -179,6 +179,11 @@ impl Engine {
     }
 
     fn get_characters_surrounding_number<'a>(&'a self, pos: &Pos, val: &'a String) -> Vec<CharPos> {
+        //special case for single digit numbers
+        if val.len() == 1 {
+            return self.get_surrounding(pos.x, pos.y, PositionInNumber::Single);
+        }
+
         let mut surrounding = vec![];
         surrounding.extend(self.get_surrounding(pos.x, pos.y, PositionInNumber::Start));
         surrounding.extend(self.get_surrounding(
@@ -335,6 +340,23 @@ mod tests {
             .to_string();
         let engine = Engine::from_string(input);
         engine
+    }
+
+    #[test]
+    fn sum_gear_ratios_with_edge_cases_should_work() {
+        let input = "\
+.2.
+.*.
+585
+"
+        .to_string();
+        let engine = Engine::from_string(input);
+        assert_eq!(engine.sum_gear_ratios(), 1170);
+    }
+    #[test]
+    fn sum_gear_ratios_should_work() {
+        let engine = gen_engine();
+        assert_eq!(engine.sum_gear_ratios(), 467835);
     }
 
     #[test]
