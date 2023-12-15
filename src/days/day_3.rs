@@ -25,9 +25,6 @@ struct CharPos {
 }
 
 impl CharPos {
-    fn new(c: char, pos: Pos) -> CharPos {
-        CharPos { c, pos }
-    }
     fn default() -> CharPos {
         CharPos {
             c: '.',
@@ -111,24 +108,6 @@ fn parse_line_into_numbers(line: &Vec<char>) -> Vec<NumberInLine> {
         numbers.push(create_number_in_line(&mut buffer, line.len()));
     }
     numbers
-}
-
-fn merge_hash_maps(
-    mut map1: HashMap<Pos, Vec<String>>,
-    map2: &HashMap<Pos, Vec<String>>,
-) -> HashMap<Pos, Vec<String>> {
-    for (key, value) in map2 {
-        match map1.contains_key(&key) {
-            true => {
-                let vec = map1.get_mut(&key).unwrap();
-                vec.extend(value.clone());
-            }
-            false => {
-                map1.insert(key.clone(), value.clone());
-            }
-        }
-    }
-    map1
 }
 
 impl Engine {

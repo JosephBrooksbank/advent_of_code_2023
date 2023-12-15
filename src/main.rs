@@ -7,7 +7,8 @@ use advent_of_code::utilities;
 fn main() {
     // day_1();
     // day_2();
-    day_3();
+    // day_3();
+    day_4();
 }
 
 fn day_1() {
@@ -36,4 +37,10 @@ fn day_3() {
     let part1 = engine.sum_valid_nums();
     println!("Result for day 3 part 1 is {}", part1);
     println!("Result for day 3 part 2 is {}", engine.sum_gear_ratios());
+}
+
+fn day_4() {
+    let lines = utilities::read_file_by_line("src/input_files/day_4.txt").unwrap();
+    let result = days::day_4::sum_all_cards(lines);
+    println!("Result for day 4 is {}", result);
 }
