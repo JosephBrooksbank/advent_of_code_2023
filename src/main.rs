@@ -41,6 +41,8 @@ fn day_3() {
 
 fn day_4() {
     let lines = utilities::read_file_by_line("src/input_files/day_4.txt").unwrap();
-    let result = days::day_4::sum_all_cards(lines);
-    println!("Result for day 4 is {}", result);
+    let result = days::day_4::sum_all_cards(&lines);
+    println!("Result for day 4 part 1 is {}", result);
+    let result = days::day_4::sum_all_cards_with_new_rules(&lines);
+    println!("Result for day 4 part 2 is {}", result);
 }
